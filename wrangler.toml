@@ -1,0 +1,11 @@
+name = "meridian-chat"
+compatibility_date = "2024-11-01"
+
+# Cloudflare Pages — o deploy é feito conectando o repositório ao Pages.
+# A pasta functions/ é detectada automaticamente (rota /api/chat).
+# Variáveis de ambiente (Pages → Settings → Environment variables):
+#   GROQ_API_KEY = gsk_...   (obrigatória em produção)
+#   GROQ_MODEL   = openai/gpt-oss-120b  (opcional)
+
+[vars]
+GROQ_MODEL = "openai/gpt-oss-120b"

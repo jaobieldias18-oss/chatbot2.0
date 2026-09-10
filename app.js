@@ -20,7 +20,7 @@
   /* ---------- theme ---------- */
   function applyTheme(t) {
     document.documentElement.dataset.theme = t;
-    $("themeLabel").textContent = t === "light" ? "Escuro" : "Claro";
+    $("themeLabel").textContent = t === "light" ? "Claro" : "Escuro";
     localStorage.setItem(LS_THEME, t);
   }
   applyTheme(localStorage.getItem(LS_THEME) || "light");

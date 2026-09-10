@@ -11,7 +11,7 @@
         • Teste local (abrir index.html direto): preencha groqKey com sua chave.
    ═══════════════════════════════════════════════════════════════ */
 window.MERIDIAN_CONFIG = {
-  supabaseUrl: "https://ssxxkeicctsadovmynsnb.supabase.co",
+  supabaseUrl: "https://ssxxkeicctsadogmynsb.supabase.co",
   supabaseKey: "sb_publishable_USknLmCjE6MjfZ2KFwlGLA_4VgBRXhg",
   model: "openai/gpt-oss-120b", // ou "openai/gpt-oss-20b"
   temperature: 0.7,

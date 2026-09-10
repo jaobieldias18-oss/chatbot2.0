@@ -186,13 +186,86 @@
     return out.join("\n");
   }
   function md(text) {
+    // Protege matemática (delimitadores LaTeX) antes do markdown,
+    // senão o parser come as barras de \[ \] \( \).
+    const maths = [];
+    const guarded = String(text).replace(/(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\))/g, (m) => {
+      maths.push(m); return "\uE000" + (maths.length - 1) + "\uE000";
+    });
+    let html;
     try {
-      if (window.marked) {
-        const raw = marked.parse(text, { breaks: true });
-        return window.DOMPurify ? DOMPurify.sanitize(raw) : raw;
-      }
-      return mdLite(text);
+      html = window.marked ? marked.parse(guarded, { breaks: true }) : mdLite(guarded);
+    } catch { html = null; }
+    try {
+      if (!html) html = mdLite(guarded);
+      html = html.replace(/\uE000(\d+)\uE000/g, (m, i) => esc(maths[+i]));
+      if (window.marked && window.DOMPurify) html = DOMPurify.sanitize(html);
+      return html;
     } catch { try { return mdLite(text); } catch { return "<p>" + esc(text) + "</p>"; } }
+  }
+
+  /* ---------- matemática (KaTeX + fallback) ---------- */
+  const MATH_SEG = /(\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$\$[\s\S]+?\$\$)/g;
+  function prettyLatex(s) {
+    let t = s;
+    // 1) sub/sup primeiro (remove chaves internas p/ as regras seguintes)
+    t = t.replace(/\^\{([^{}]*)\}/g, "<sup>$1</sup>").replace(/_\{([^{}]*)\}/g, "<sub>$1</sub>");
+    t = t.replace(/\\boxed\{([^{}]*)\}/g, "$1");
+    t = t.replace(/\\sqrt\{([^{}]*)\}/g, "√($1)");
+    t = t.replace(/\\text\{([^{}]*)\}/g, "$1");
+    for (let k = 0; k < 3; k++) t = t.replace(/\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, "($1)/($2)");
+    const cmd = { pm: "±", cdot: "·", times: "×", div: "÷", neq: "≠", leq: "≤", geq: "≥", approx: "≈", infty: "∞", sum: "Σ", int: "∫", Delta: "Δ", delta: "δ", alpha: "α", beta: "β", gamma: "γ", theta: "θ", lambda: "λ", mu: "μ", pi: "π", sigma: "σ", phi: "φ", sqrt: "√", to: "→" };
+    t = t.replace(/\\(pm|cdot|times|div|neq|leq|geq|approx|infty|sum|int|Delta|delta|alpha|beta|gamma|theta|lambda|mu|pi|sigma|phi|sqrt|to)\b/g, (m, c) => cmd[c]);
+    t = t.replace(/\\(left|right|big|bigg|quad|qquad|,|;|:|!)\b/g, " ").replace(/\\[,;:!]/g, " ");
+    t = t.replace(/\\\\/g, " ");
+    t = t.replace(/\\([a-zA-Z]+)/g, "$1");
+    t = t.replace(/[{}]/g, "");
+    return t.trim();
+  }
+  function prettifyMathFallback(el) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (n.nodeValue.indexOf("\\") < 0 && n.nodeValue.indexOf("$$") < 0) return NodeFilter.FILTER_REJECT;
+        const p = n.parentElement;
+        if (p && /^(PRE|CODE|SCRIPT|STYLE)$/.test(p.tagName)) return NodeFilter.FILTER_REJECT;
+        MATH_SEG.lastIndex = 0;
+        return MATH_SEG.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const n of nodes) {
+      const frag = document.createDocumentFragment();
+      let last = 0; MATH_SEG.lastIndex = 0;
+      const txt = n.nodeValue;
+      let m;
+      while ((m = MATH_SEG.exec(txt))) {
+        if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+        const raw = m[0], disp = raw.startsWith("\\[") || raw.startsWith("$$");
+        const inner = raw.replace(/^(\$\$|\\\[|\\\()/, "").replace(/(\$\$|\\\]|\\\))$/, "");
+        const s = document.createElement("span");
+        s.className = "math-fb" + (disp ? "" : " inline");
+        s.innerHTML = prettyLatex(esc(inner));
+        frag.appendChild(s);
+        last = m.index + raw.length;
+      }
+      if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
+      n.parentNode.replaceChild(frag, n);
+    }
+  }
+  function renderMath(el) {
+    try {
+      if (window.renderMathInElement) {
+        renderMathInElement(el, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "\\[", right: "\\]", display: true },
+            { left: "\\(", right: "\\)", display: false },
+          ],
+          throwOnError: false,
+        });
+      } else prettifyMathFallback(el);
+    } catch { try { prettifyMathFallback(el); } catch {} }
   }
   function scrollBottom() { requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; }); }
   function setWelcomeVisible() { welcome.style.display = messages.length ? "none" : ""; }
@@ -206,7 +279,9 @@
       <div class="bubble"><div class="who">${role === "user" ? "Você" : "Meridian"}</div>
       <div class="body"></div>
       <div class="msg-actions"><button class="mini-btn copy">Copiar</button></div></div>`;
-    el.querySelector(".body").innerHTML = md(content);
+    const bd = el.querySelector(".body");
+    bd.innerHTML = md(content);
+    if (content) renderMath(bd);
     el.querySelector(".copy").onclick = async () => {
       await navigator.clipboard.writeText(content).catch(() => {});
       toast("Copiado");
@@ -240,7 +315,7 @@
   }
 
   /* ---------- Groq via Cloudflare ---------- */
-  const SYSTEM = "Você é o Meridian, um assistente editorial e objetivo. Responda em português brasileiro, com tom profissional e minimalista. Evite clichês de IA ('como modelo de linguagem', emojis excessivos, listas genéricas). Seja direto, útil e elegante. Use markdown quando ajudar na leitura.";
+  const SYSTEM = "Você é o Meridian, um assistente editorial e objetivo. Responda em português brasileiro, com tom profissional e minimalista. Evite clichês de IA ('como modelo de linguagem', emojis excessivos, listas genéricas). Seja direto, útil e elegante. Use markdown quando ajudar na leitura. Para matemática, use LaTeX: \\(...\\) para fórmulas no meio do texto e \\[...\\] para fórmulas em destaque, uma por bloco.";
   async function complete(history, signal) {
     const payload = {
       model: cfg.model || "openai/gpt-oss-120b",
@@ -347,6 +422,7 @@
       const body = el.querySelector(".body");
       try { await typewriterReveal(body, reply, aborter.signal); }
       catch { body.innerHTML = md(reply); } // interrompido: mostra parcial/final
+      renderMath(body);
       el.querySelector(".copy").onclick = async () => { await navigator.clipboard.writeText(reply).catch(() => {}); toast("Copiado"); };
       await dbAddMsg(currentId, "assistant", reply);
       await dbUpdateConvo(currentId, { updated_at: new Date().toISOString() });

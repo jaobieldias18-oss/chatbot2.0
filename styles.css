@@ -129,6 +129,11 @@ body{
 .bubble table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}
 .bubble th,.bubble td{border:1px solid var(--line);padding:7px 10px;text-align:left}
 .bubble th{background:var(--paper-2);font-weight:600}
+/* matemática */
+.bubble .katex-display{margin:12px 0;padding:12px 8px;overflow-x:auto;overflow-y:hidden;background:var(--paper-2);border:1px solid var(--line);border-radius:10px}
+.bubble .katex{font-size:1.04em}
+.math-fb{display:block;text-align:center;font-family:Georgia,"Times New Roman",serif;font-size:16.5px;line-height:1.7;margin:12px 0;padding:12px 8px;background:var(--paper-2);border:1px solid var(--line);border-radius:10px}
+.math-fb.inline{display:inline;margin:0;padding:1px 7px;font-size:1em;border-radius:7px;text-align:left}
 .bubble pre{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-x:auto;font:400 12.8px/1.6 var(--font-mono)}
 .bubble code{font-family:var(--font-mono);font-size:.88em;background:var(--paper-2);border:1px solid var(--line);border-radius:6px;padding:1.5px 6px}
 .bubble pre code{background:none;border:0;padding:0}

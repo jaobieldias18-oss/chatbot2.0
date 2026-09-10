@@ -154,12 +154,45 @@
   $("searchInput").oninput = (e) => renderHistory(e.target.value);
 
   /* ---------- thread UI ---------- */
-  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  // Renderizador markdown próprio (fallback quando o CDN marked falha/offline)
+  function mdLite(text) {
+    const fences = [];
+    let src = esc(text).replace(/```(\w*)\n([\s\S]*?)(```|$)/g, (m, lang, code) => {
+      fences.push('<pre><code class="lang-' + lang + '">' + code.replace(/\n$/, "") + "</code></pre>");
+      return "\u0000" + (fences.length - 1) + "\u0000";
+    });
+    const inline = (s) => s
+      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|\W)\*([^*\n]+)\*/g, "$1<em>$2</em>")
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    const lines = src.split("\n"), out = [];
+    let list = null;
+    const closeList = () => { if (list) { out.push(list === "ul" ? "</ul>" : "</ol>"); list = null; } };
+    for (let ln of lines) {
+      const fence = ln.match(/^\u0000(\d+)\u0000$/);
+      if (fence) { closeList(); out.push(fences[+fence[1]]); continue; }
+      let m;
+      if ((m = ln.match(/^(#{1,4})\s+(.*)/))) { closeList(); const lv = m[1].length; out.push(`<h${lv + 2}>${inline(m[2])}</h${lv + 2}>`); }
+      else if ((m = ln.match(/^&gt;\s?(.*)/))) { closeList(); out.push("<blockquote>" + inline(m[1]) + "</blockquote>"); }
+      else if (/^---+$/.test(ln.trim())) { closeList(); out.push("<hr>"); }
+      else if ((m = ln.match(/^(\s*)[-*•]\s+(.*)/))) { if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; } out.push("<li>" + inline(m[2]) + "</li>"); }
+      else if ((m = ln.match(/^(\s*)\d+[.)]\s+(.*)/))) { if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; } out.push("<li>" + inline(m[2]) + "</li>"); }
+      else if (ln.trim() === "") { closeList(); }
+      else { closeList(); out.push("<p>" + inline(ln) + "</p>"); }
+    }
+    closeList();
+    return out.join("\n");
+  }
   function md(text) {
     try {
-      const raw = window.marked ? marked.parse(text, { breaks: true }) : "<p>" + esc(text) + "</p>";
-      return window.DOMPurify ? DOMPurify.sanitize(raw) : raw;
-    } catch { return "<p>" + esc(text) + "</p>"; }
+      if (window.marked) {
+        const raw = marked.parse(text, { breaks: true });
+        return window.DOMPurify ? DOMPurify.sanitize(raw) : raw;
+      }
+      return mdLite(text);
+    } catch { try { return mdLite(text); } catch { return "<p>" + esc(text) + "</p>"; } }
   }
   function scrollBottom() { requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; }); }
   function setWelcomeVisible() { welcome.style.display = messages.length ? "none" : ""; }

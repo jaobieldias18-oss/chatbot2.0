@@ -233,15 +233,23 @@
     } catch (e) {
       if (e.name === "AbortError") throw e;
       if (cfg.groqKey) { /* tenta direto abaixo */ }
+      else if (location.protocol === "file:") throw new Error("Você abriu o arquivo local. A IA só funciona no site publicado: https://meridian-chat.pages.dev");
+      else if (e instanceof TypeError) throw new Error("Sem conexão com o servidor. Verifique sua internet e recarregue a página.");
       else throw new Error("Groq indisponível: configure GROQ_API_KEY no Cloudflare Pages ou preencha groqKey no config.js para teste local.");
     }
     // 2) fallback local direto ao Groq
     if (!cfg.groqKey) throw new Error("Sem chave Groq (groqKey no config.js) para teste local.");
-    const r2 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.groqKey },
-      body: JSON.stringify(payload), signal,
-    });
+    let r2;
+    try {
+      r2 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.groqKey },
+        body: JSON.stringify(payload), signal,
+      });
+    } catch (e) {
+      if (e.name === "AbortError") throw e;
+      throw new Error("Sem conexão com o Groq. Verifique sua internet e tente de novo.");
+    }
     if (!r2.ok) throw new Error("Groq " + r2.status + ": " + (await r2.text()).slice(0, 300));
     const j2 = await r2.json();
     return { text: j2.choices?.[0]?.message?.content || "(sem resposta)", via: "groq-direto" };
